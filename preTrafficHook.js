@@ -1,69 +1,71 @@
-'use strict';
+"use strict";
 
-const AWS = require('aws-sdk');
-const codedeploy = new AWS.CodeDeploy({apiVersion: '2014-10-06'});
+const AWS = require("aws-sdk");
+const codedeploy = new AWS.CodeDeploy({ apiVersion: "2014-10-06" });
 var lambda = new AWS.Lambda();
 
 exports.handler = (event, context, callback) => {
+  console.log("Entering PreTraffic Hook!");
 
-	console.log("Entering PreTraffic Hook!");
-	
-	// Read the DeploymentId & LifecycleEventHookExecutionId from the event payload
-    var deploymentId = event.DeploymentId;
-	var lifecycleEventHookExecutionId = event.LifecycleEventHookExecutionId;
+  // Read the DeploymentId & LifecycleEventHookExecutionId from the event payload
+  var deploymentId = event.DeploymentId;
+  var lifecycleEventHookExecutionId = event.LifecycleEventHookExecutionId;
 
-	var functionToTest = process.env.NewVersion;
-	console.log("Testing new function version: " + functionToTest);
+  var functionToTest = process.env.NewVersion;
+  console.log("Testing new function version: " + functionToTest);
 
-	// Perform validation of the newly deployed Lambda version
+  // Perform validation of the newly deployed Lambda version
   const payload = JSON.stringify({
     HTTPMethod: "GET",
-    Path:"/"
-  })
-	var lambdaParams = {
-		FunctionName: functionToTest,
-		InvocationType: "RequestResponse",
+    Path: "/"
+  });
+  var lambdaParams = {
+    FunctionName: functionToTest,
+    InvocationType: "RequestResponse",
     Payload: payload
-	};
+  };
 
-	var lambdaResult = "Failed";
-	lambda.invoke(lambdaParams, function(err, data) {
-		if (err){	// an error occurred
-			console.log(err, err.stack);
-			lambdaResult = "Failed";
-		}
-		else{	// successful response
-			var result = JSON.parse(data.Payload);
-			console.log("Result: " +  JSON.stringify(result));
-			if(result.statusCode == 200){	
-				lambdaResult = "Succeeded";
-				console.log ("Validation testing succeeded!");
-			}
-			else{
-				lambdaResult = "Failed";
-				console.log ("Validation testing failed!");
-			}
+  var lambdaResult = "Failed";
+  lambda.invoke(lambdaParams, function(err, data) {
+    if (err) {
+      // an error occurred
+      console.log(err, err.stack);
+      lambdaResult = "Failed";
+    } else {
+      // successful response
+      var result = JSON.parse(data.Payload);
+      console.log("Result: " + JSON.stringify(result));
+      if (result.statusCode == 200) {
+        lambdaResult = "Succeeded";
+        console.log("Validation testing succeeded!");
+      } else {
+        lambdaResult = "Failed";
+        console.log("Validation testing failed!");
+      }
     }
-    
+
     // Complete the PreTraffic Hook by sending CodeDeploy the validation status
     var params = {
       deploymentId: deploymentId,
       lifecycleEventHookExecutionId: lifecycleEventHookExecutionId,
       status: lambdaResult // status can be 'Succeeded' or 'Failed'
     };
-    
+
     // Pass AWS CodeDeploy the prepared validation test results.
-    codedeploy.putLifecycleEventHookExecutionStatus(params, function(err, data) {
+    codedeploy.putLifecycleEventHookExecutionStatus(params, function(
+      err,
+      data
+    ) {
       if (err) {
         // Validation failed.
-        console.log('CodeDeploy Status update failed');
+        console.log("CodeDeploy Status update failed");
         console.log(err, err.stack);
         callback("CodeDeploy Status update failed");
       } else {
         // Validation succeeded.
-        console.log('Codedeploy status updated successfully');
-        callback(null, 'Codedeploy status updated successfully');
+        console.log("Codedeploy status updated successfully");
+        callback(null, "Codedeploy status updated successfully");
       }
     });
-	});
-}
+  });
+};
